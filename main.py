@@ -3,9 +3,10 @@
 import os
 from langchain_google_genai import GoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate , MessagesPlaceholder
 from langchain_core.messages import AIMessage
-
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import START, MessagesState, StateGraph
 
 #_ Model initiation
 api_key = os.environ["GOOGLE_API_KEY"]
@@ -43,4 +44,28 @@ completion = model.invoke(
     ]
 )
 
-print(completion)
+# print(completion)
+
+#_ Message persistance 
+workflow = StateGraph(state_schema=MessagesState)
+
+def call_model(state: MessagesState):
+    response = model.invoke(state["messages"])
+    return {"messages": response}
+
+workflow.add_edge(START, "model")
+workflow.add_node("model", call_model)
+
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)
+
+config = {"configurable": {"thread_id": "abc123"}}
+
+
+query = "Hi! I'm Bob."
+
+input_messages = [HumanMessage(query)]
+output = app.invoke({"messages": input_messages}, config) # ainvoke for async
+[message.pretty_print() for message in output["messages"]]
+
+
