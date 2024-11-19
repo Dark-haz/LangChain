@@ -49,8 +49,21 @@ completion = model.invoke(
 #_ Message persistance 
 workflow = StateGraph(state_schema=MessagesState)
 
+#_ Advanced prompt template
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You talk like a pirate. Answer all questions to the best of your ability.",
+        ),
+        MessagesPlaceholder(variable_name="messages"),
+    ]
+)
+
+
 def call_model(state: MessagesState):
-    response = model.invoke(state["messages"])
+    chain = prompt | model
+    response = chain.invoke(state)
     return {"messages": response}
 
 workflow.add_edge(START, "model")
