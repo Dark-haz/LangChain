@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate , MessagesPlaceholder
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import SystemMessage, trim_messages
 from langgraph.graph import START, MessagesState, StateGraph
 
 #_ Model initiation
@@ -63,16 +64,29 @@ prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "You talk like a pirate. Answer all questions to the best of your ability in {language}.",
+            "Answer all questions to the best of your ability in {language}.",
         ),
         MessagesPlaceholder(variable_name="messages"),
     ]
 )
 
+#_ Dealing with list of history messages
+
+trimmer = trim_messages( #? messages helper
+    max_tokens=50,
+    strategy="last",
+    token_counter=model,
+    include_system=True,
+    allow_partial=False,
+    start_on="human",
+)
 
 def call_model(state: State):
     chain = prompt | model
-    response = chain.invoke(state)
+    trimmed_messages = trimmer.invoke(state["messages"])
+    response = chain.invoke(
+        {"messages": trimmed_messages, "language": state["language"]}
+    )
     return {"messages": [response]}
 
     
@@ -85,16 +99,41 @@ app = workflow.compile(checkpointer=memory)
 config = {"configurable": {"thread_id": "abc123"}}
 
 
-query = "Hi! I'm Bob."
-input_messages = [HumanMessage(query)]
-output = app.invoke({"messages": input_messages, "language": "Arabic"}, config) # ainvoke for async
-[message.pretty_print() for message in output["messages"]]
+# query = "Hi! I'm Bob."
+# input_messages = [HumanMessage(query)]
+# output = app.invoke({"messages": input_messages, "language": "Arabic"}, config) # ainvoke for async
+# [message.pretty_print() for message in output["messages"]]
 
 
-query = "What is my name?"
-input_messages = [HumanMessage(query)]
+# query = "What is my name?"
+# input_messages = [HumanMessage(query)]
+# output = app.invoke(
+#     {"messages": input_messages}, #! can omit language if no changes desired, its persisted
+#     config,
+# )
+# output["messages"][-1].pretty_print()
+
+
+messages = [
+    SystemMessage(content="you're a good assistant"),
+    HumanMessage(content="hi! I'm bob"),
+    AIMessage(content="hi!"),
+    HumanMessage(content="I like vanilla ice cream"),
+    AIMessage(content="nice"),
+    HumanMessage(content="whats 2 + 2"),
+    AIMessage(content="4"),
+    HumanMessage(content="thanks, i like chocolate ice cream"),
+    AIMessage(content="no problem!"),
+    HumanMessage(content="having fun?"),
+    AIMessage(content="yes!"),
+]
+
+query = "what do i like when it comes to ice cream?"
+language = "English"
+
+input_messages = messages + [HumanMessage(query)]
 output = app.invoke(
-    {"messages": input_messages}, #! can omit language if no changes desired, its persisted
+    {"messages": input_messages, "language": language},
     config,
 )
 output["messages"][-1].pretty_print()
