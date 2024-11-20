@@ -132,8 +132,18 @@ query = "what do i like when it comes to ice cream?"
 language = "English"
 
 input_messages = messages + [HumanMessage(query)]
-output = app.invoke(
+# output = app.invoke(
+#     {"messages": input_messages, "language": language},
+#     config,
+# )
+# output["messages"][-1].pretty_print()
+
+#_ Model response streaming
+for chunk, metadata in app.stream(
     {"messages": input_messages, "language": language},
     config,
-)
-output["messages"][-1].pretty_print()
+    stream_mode="messages",
+):
+    if isinstance(chunk, AIMessage):  # Filter to just model responses
+        print(chunk.content, end="|")
+
